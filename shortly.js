@@ -2,6 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var session = require('express-session');
 
 
 var db = require('./app/config');
@@ -22,22 +23,39 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
+app.use(session({
+  secret: 'keyboard cat'
+}));
 
 app.get('/', 
 function(req, res) {
-  res.render('index');
+  if (!req.session.user) {
+    res.redirect('login');
+  } else {
+    res.render('index');
+  }
 });
 
 app.get('/create', 
 function(req, res) {
-  res.render('index');
+  if (!req.session.user) {
+    res.redirect('/login');
+  } else {
+    res.render('index');
+  }
 });
 
 app.get('/links', 
 function(req, res) {
-  Links.reset().fetch().then(function(links) {
-    res.send(200, links.models);
-  });
+  if (!req.session.user) {
+    console.log("not signed in");
+    res.redirect('/login');
+  } else {
+    console.log("prepare to break.");
+    Links.reset().fetch().then(function(links) {
+      res.send(200, links.models);
+    });
+  }
 });
 
 app.post('/links', 
@@ -76,6 +94,55 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
+app.get('/login', 
+function(req, res) {
+  if (!req.session.user) {
+    res.render('login');
+  } else {
+    res.redirect('/');
+  }
+});
+
+app.post('/login', 
+function(req, res) {
+  new User({'username': req.body.username})
+    .fetch()
+    .then(function(model){
+      if (model) {
+        req.session.user = req.body.username;
+        res.redirect('/');
+      } else {
+        // res.writeHead()
+        res.redirect('/login');
+      }
+    });
+  
+});
+
+app.get('/signup',
+function(req, res) {
+  res.render('signup');
+});
+
+app.post('/signup',
+function(req, res) {
+  new User({username: req.body.username, password: req.body.password}).fetch().then(function(found) {
+    if (found) {
+      res.send(200, found.attributes);
+    } else {
+      console.log("Are you creating a new user?");
+      Users.create({
+        username: req.body.username,
+        password: req.body.password
+      })
+      .then(function(newUser) {
+        req.session.user = req.body.username;
+        console.log("newUser is", newUser);
+        res.redirect('/');
+      });
+    }
+  });
+});
 
 
 /************************************************************/
