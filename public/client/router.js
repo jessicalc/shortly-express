@@ -20,5 +20,12 @@ Shortly.Router = Backbone.Router.extend({
 
   create: function(){
     this.swapView(new Shortly.createLinkView());
-  }
+  },
+
+  // logout: function(){
+  //   console.log('In backbone router!');
+  //   var links = new Shortly.Links();
+  //   var linksView = new Shortly.LinksView({ collection: links });
+  //   this.swapView(linksView);
+  // }
 });

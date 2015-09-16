@@ -17,6 +17,7 @@ window.Shortly = Backbone.View.extend({
   },
 
   render: function(){
+    // var username = document.cookie.match(/user=(.*)/)[1];
     this.$el.html( this.template() );
     return this;
   },

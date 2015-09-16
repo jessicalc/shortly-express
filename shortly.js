@@ -3,6 +3,8 @@ var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
+var passport = require('passport');
+var GitHubStrategy = require('passport-github2').Strategy;
 
 
 var db = require('./app/config');
@@ -14,17 +16,43 @@ var Click = require('./app/models/click');
 
 var app = express();
 
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(obj, done) {
+  User.findById(id, function(err, user) {
+    done(err, user);
+  });
+});
+
+/* Set up stragetgy */
+passport.use(new GitHubStrategy({
+    clientID: 'd30ca69ba586ca3eaf73',
+    clientSecret: 'a67961550c89fdde9622bf40eeb73a9f614c121d',
+    callbackURL: "http://127.0.0.1:4568"
+  },
+  function(accessToken, refreshToken, profile, done) {
+    process.nextTick(function () {
+      console.log(profile);
+      return done(null, profile);
+    });
+  })
+);
+
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
 app.use(partials());
 // Parse JSON (uniform resource locators)
 app.use(bodyParser.json());
+// app.use(express.cookieParser());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
 app.use(session({
-  secret: 'keyboard cat'
+  secret: 'keyboard cat',
+  cookie: {}
 }));
 
 app.get('/', 
@@ -32,7 +60,8 @@ function(req, res) {
   if (!req.session.user) {
     res.redirect('login');
   } else {
-    res.render('index');
+    console.log(req.session.user);
+    res.render('index', {username: req.session.user});
   }
 });
 
@@ -51,8 +80,10 @@ function(req, res) {
     console.log("not signed in");
     res.redirect('/login');
   } else {
-    console.log("prepare to break.");
-    Links.reset().fetch().then(function(links) {
+    console.log(req.session.user_id);
+    Links.query(function(query) {
+      query.where('user_id', '=', req.session.user_id);
+    }).fetch().then(function(links) {
       res.send(200, links.models);
     });
   }
@@ -76,10 +107,14 @@ function(req, res) {
           console.log('Error reading URL heading: ', err);
           return res.send(404);
         }
+        /* Get id associated with session */
+
 
         Links.create({
           url: uri,
           title: title,
+          user_id: req.session.user_id,
+          //  set the user_id to the req.session.id
           base_url: req.headers.origin
         })
         .then(function(newLink) {
@@ -110,6 +145,8 @@ function(req, res) {
     .then(function(model){
       if (model) {
         req.session.user = req.body.username;
+        req.session.user_id = model.get('id');
+        console.log('req.session.user_id is', model.get('id'));
         res.redirect('/');
       } else {
         // res.writeHead()
@@ -133,17 +170,27 @@ function(req, res) {
       console.log("Are you creating a new user?");
       Users.create({
         username: req.body.username,
-        password: req.body.password
+        password: req.body.password,
       })
       .then(function(newUser) {
         req.session.user = req.body.username;
-        console.log("newUser is", newUser);
+        req.session.user_id = newUser.get('id');
+        console.log('session ID on signup is', req.session.user_id);
         res.redirect('/');
       });
     }
   });
 });
 
+/* Logout functionality */
+app.get('/logout', function(req, res){
+  console.log("Logging out in shortly.js in server");
+  req.session.destroy(function(err) {
+    if (err) console.log("Crap! Something wrong")
+  });
+  res.clearCookie('user');
+  res.redirect('/');
+});
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
